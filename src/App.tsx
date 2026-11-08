@@ -2,7 +2,20 @@ import { useMemo, useState } from 'react'
 import { CircleMarker, MapContainer, Popup, TileLayer } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { generateMeasurements } from './data'
+import HeatLayer from './HeatLayer'
 import './App.css'
+
+type Mode = 'points' | 'heat'
+
+// Fehlgeschlagene Kacheln (graue Lücken) bis zu 3x neu laden
+function retryTile(e: { tile: HTMLImageElement }) {
+  const img = e.tile
+  const tries = Number(img.dataset.retries ?? 0)
+  if (tries >= 3) return
+  img.dataset.retries = String(tries + 1)
+  const src = img.src.split('?')[0]
+  setTimeout(() => { img.src = `${src}?retry=${tries + 1}` }, 500 * (tries + 1))
+}
 
 // Farbskala: niedrig = blau, hoch = rot
 function colorFor(value: number): string {
@@ -13,12 +26,17 @@ function colorFor(value: number): string {
 export default function App() {
   const data = useMemo(() => generateMeasurements(500), [])
   const [selected, setSelected] = useState<number | null>(null)
+  const [mode, setMode] = useState<Mode>('points')
 
   return (
-    <div className="layout">
+    <div className={`layout ${mode === 'heat' ? 'gray' : ''}`}>
       <aside className="table-panel">
         <h1>Map Tool</h1>
         <p>{data.length} Messwerte in Berlin</p>
+        <div className="toggle" role="group" aria-label="Darstellung">
+          <button className={mode === 'points' ? 'active' : ''} onClick={() => setMode('points')}>Punkte</button>
+          <button className={mode === 'heat' ? 'active' : ''} onClick={() => setMode('heat')}>Heatmap</button>
+        </div>
         <table>
           <thead>
             <tr><th>Name</th><th>Wert</th><th>Lat</th><th>Lng</th></tr>
@@ -42,9 +60,11 @@ export default function App() {
       <MapContainer center={[52.52, 13.405]} zoom={11} className="map">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          eventHandlers={{ tileerror: retryTile }}
         />
-        {data.map((m) => (
+        {mode === 'heat' && <HeatLayer data={data} />}
+        {mode === 'points' && data.map((m) => (
           <CircleMarker
             key={m.id}
             center={[m.lat, m.lng]}
@@ -55,6 +75,11 @@ export default function App() {
             <Popup>{m.name}<br />Messwert: {m.value}</Popup>
           </CircleMarker>
         ))}
+        {mode === 'heat' && (
+          <div className="legend">
+            <span>1</span><div className="bar" /><span>100</span>
+          </div>
+        )}
       </MapContainer>
     </div>
   )

@@ -8,3 +8,10 @@ td, th { padding: 3px 6px; border-bottom: 1px solid #eee; }
 tbody tr { cursor: pointer; }
 tbody tr:hover, tr.selected { background: #fff3c4; }
 @media (prefers-color-scheme: dark) { th { background: #242424; } tbody tr:hover, tr.selected { background: #4a4420; } }
+.toggle { display: inline-flex; margin: 4px 0 10px; border: 1px solid #888; border-radius: 6px; overflow: hidden; }
+.toggle button { border: 0; border-radius: 0; padding: 6px 14px; background: transparent; cursor: pointer; font: inherit; color: inherit; }
+.toggle button.active { background: #2563eb; color: #fff; }
+.map { position: relative; }
+.layout.gray .leaflet-tile-pane { filter: grayscale(1); }
+.legend { position: absolute; bottom: 24px; right: 12px; z-index: 1000; display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.9); color: #000; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; }
+.legend .bar { width: 120px; height: 10px; background: linear-gradient(to right, #1a9850, #ffe600, #d73027); border-radius: 3px; }
