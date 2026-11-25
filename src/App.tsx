@@ -12,6 +12,16 @@ const bundledTiles = Object.values(
   import.meta.glob<string>('./assets/berlin.pmtiles', { query: '?inline', import: 'default', eager: true }),
 )[0]
 
+// Online-Hintergrundkarte (OpenStreetMap-Daten). tile.openstreetmap.org sperrt Abrufe ohne Referer
+// (z. B. beim Öffnen der Einzeldatei per file://), daher CARTO "Positron". Zum Wechseln nur diesen Block ändern.
+const ONLINE_TILES = {
+  url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  subdomains: 'abcd',
+  maxZoom: 20,
+  attribution:
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende &copy; <a href="https://carto.com/attributions">CARTO</a>',
+}
+
 type Mode = 'points' | 'heat'
 
 // Fehlgeschlagene Kacheln (graue Lücken) bis zu 3x neu laden
@@ -69,8 +79,10 @@ export default function App() {
           <OfflineBasemap dataUrl={bundledTiles} />
         ) : (
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende'
-            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={ONLINE_TILES.attribution}
+            url={ONLINE_TILES.url}
+            subdomains={ONLINE_TILES.subdomains}
+            maxZoom={ONLINE_TILES.maxZoom}
             eventHandlers={{ tileerror: retryTile }}
           />
         )}
