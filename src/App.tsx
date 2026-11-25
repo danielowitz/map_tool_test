@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { CircleMarker, MapContainer, Popup, TileLayer } from 'react-leaflet'
+import { CircleMarker, ImageOverlay, MapContainer, Popup, TileLayer } from 'react-leaflet'
+import type { LatLngBoundsLiteral } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { generateMeasurements } from './data'
 import HeatLayer from './HeatLayer'
@@ -21,6 +22,15 @@ const ONLINE_TILES = {
   attribution:
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende &copy; <a href="https://carto.com/attributions">CARTO</a>',
 }
+
+// Statisches OSM-Hintergrundbild (scripts/make-berlin-image.mjs). Liegt es in src/assets vor, hat es Vorrang
+// und die App braucht kein Internet.
+const bgImage = Object.values(
+  import.meta.glob<string>('./assets/berlin-map.png', { query: '?inline', import: 'default', eager: true }),
+)[0]
+const bgMeta = Object.values(
+  import.meta.glob<{ zoom: number; bounds: LatLngBoundsLiteral }>('./assets/berlin-map.json', { import: 'default', eager: true }),
+)[0]
 
 type Mode = 'points' | 'heat'
 
@@ -74,8 +84,17 @@ export default function App() {
           </tbody>
         </table>
       </aside>
-      <MapContainer center={[52.52, 13.405]} zoom={11} className="map">
-        {bundledTiles ? (
+      <MapContainer
+        center={[52.52, 13.405]}
+        zoom={11}
+        minZoom={9}
+        maxZoom={bgImage && bgMeta ? bgMeta.zoom + 2 : 18}
+        maxBounds={bgImage && bgMeta ? bgMeta.bounds : undefined}
+        className="map"
+      >
+        {bgImage && bgMeta ? (
+          <ImageOverlay url={bgImage} bounds={bgMeta.bounds} className="bg-image" attribution="&copy; OpenStreetMap-Mitwirkende" />
+        ) : bundledTiles ? (
           <OfflineBasemap dataUrl={bundledTiles} />
         ) : (
           <TileLayer
