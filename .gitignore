@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Kartendaten für die Offline-Karte (nicht im Repo, zu groß)
+src/assets/berlin.pmtiles

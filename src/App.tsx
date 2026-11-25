@@ -3,7 +3,14 @@ import { CircleMarker, MapContainer, Popup, TileLayer } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { generateMeasurements } from './data'
 import HeatLayer from './HeatLayer'
+import OfflineBasemap from './OfflineBasemap'
 import './App.css'
+
+// Liegt src/assets/berlin.pmtiles vor, wird die Karte offline daraus gezeichnet (in der Einzeldatei eingebettet).
+// Sonst: Fallback auf die Online-Kacheln von OpenStreetMap.
+const bundledTiles = Object.values(
+  import.meta.glob<string>('./assets/berlin.pmtiles', { query: '?inline', import: 'default', eager: true }),
+)[0]
 
 type Mode = 'points' | 'heat'
 
@@ -58,11 +65,15 @@ export default function App() {
         </table>
       </aside>
       <MapContainer center={[52.52, 13.405]} zoom={11} className="map">
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende'
-          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          eventHandlers={{ tileerror: retryTile }}
-        />
+        {bundledTiles ? (
+          <OfflineBasemap dataUrl={bundledTiles} />
+        ) : (
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende'
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            eventHandlers={{ tileerror: retryTile }}
+          />
+        )}
         {mode === 'heat' && <HeatLayer data={data} />}
         {mode === 'points' && data.map((m) => (
           <CircleMarker
