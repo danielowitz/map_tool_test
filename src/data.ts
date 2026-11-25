@@ -1,3 +1,5 @@
+import districts from './assets/berlin-bezirke.json'
+
 export interface Measurement {
   id: number
   name: string
@@ -6,25 +8,23 @@ export interface Measurement {
   lng: number
 }
 
-// Grobe Umrisslinie Berlins ([lat, lng]) für die Verteilung der Punkte.
-export const BERLIN_POLYGON: [number, number][] = [
-  [52.655, 13.3], [52.645, 13.37], [52.62, 13.47], [52.57, 13.56],
-  [52.54, 13.62], [52.51, 13.7], [52.42, 13.76], [52.38, 13.64],
-  [52.38, 13.52], [52.4, 13.4], [52.42, 13.25], [52.4, 13.15],
-  [52.45, 13.09], [52.53, 13.15], [52.54, 13.23], [52.6, 13.2],
-  [52.65, 13.25],
-]
+// Echte Bezirksgrenzen (GeoJSON, [lng, lat]) – Punkte werden nur innerhalb Berlins erzeugt.
+type Ring = [number, number][]
+export const polygons: Ring[][] = (districts as unknown as { features: { geometry: { coordinates: Ring[][] } }[] }).features
+  .flatMap((f) => f.geometry.coordinates)
 
-function inPolygon(lat: number, lng: number, poly: [number, number][]): boolean {
+function inRing(lng: number, lat: number, ring: Ring): boolean {
   let inside = false
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [yi, xi] = poly[i]
-    const [yj, xj] = poly[j]
-    if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-      inside = !inside
-    }
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]
+    const [xj, yj] = ring[j]
+    if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside
   }
   return inside
+}
+
+function inBerlin(lat: number, lng: number): boolean {
+  return polygons.some(([outer, ...holes]) => inRing(lng, lat, outer) && !holes.some((h) => inRing(lng, lat, h)))
 }
 
 // Kleiner deterministischer Zufallsgenerator, damit die Daten bei jedem Laden gleich sind.
@@ -40,8 +40,9 @@ function mulberry32(seed: number) {
 
 export function generateMeasurements(count = 500, seed = 42): Measurement[] {
   const rand = mulberry32(seed)
-  const lats = BERLIN_POLYGON.map((p) => p[0])
-  const lngs = BERLIN_POLYGON.map((p) => p[1])
+  const all = polygons.flatMap((p) => p[0])
+  const lats = all.map((p) => p[1])
+  const lngs = all.map((p) => p[0])
   const [minLat, maxLat] = [Math.min(...lats), Math.max(...lats)]
   const [minLng, maxLng] = [Math.min(...lngs), Math.max(...lngs)]
 
@@ -49,7 +50,7 @@ export function generateMeasurements(count = 500, seed = 42): Measurement[] {
   while (result.length < count) {
     const lat = minLat + rand() * (maxLat - minLat)
     const lng = minLng + rand() * (maxLng - minLng)
-    if (!inPolygon(lat, lng, BERLIN_POLYGON)) continue
+    if (!inBerlin(lat, lng)) continue
     const id = result.length + 1
     result.push({
       id,

@@ -1,53 +1,31 @@
 import { useMemo, useState } from 'react'
-import { CircleMarker, ImageOverlay, MapContainer, Popup, TileLayer } from 'react-leaflet'
-import type { LatLngBoundsLiteral } from 'leaflet'
+import { CircleMarker, GeoJSON, MapContainer, Pane, Popup } from 'react-leaflet'
+import type { Feature } from 'geojson'
+import type { Layer, LatLngBoundsLiteral } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { generateMeasurements } from './data'
+import districts from './assets/berlin-bezirke.json'
 import HeatLayer from './HeatLayer'
-import OfflineBasemap from './OfflineBasemap'
 import './App.css'
-
-// Liegt src/assets/berlin.pmtiles vor, wird die Karte offline daraus gezeichnet (in der Einzeldatei eingebettet).
-// Sonst: Fallback auf die Online-Kacheln von OpenStreetMap.
-const bundledTiles = Object.values(
-  import.meta.glob<string>('./assets/berlin.pmtiles', { query: '?inline', import: 'default', eager: true }),
-)[0]
-
-// Online-Hintergrundkarte (OpenStreetMap-Daten). tile.openstreetmap.org sperrt Abrufe ohne Referer
-// (z. B. beim Öffnen der Einzeldatei per file://), daher CARTO "Positron". Zum Wechseln nur diesen Block ändern.
-const ONLINE_TILES = {
-  url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-  subdomains: 'abcd',
-  maxZoom: 20,
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende &copy; <a href="https://carto.com/attributions">CARTO</a>',
-}
-
-// Statisches OSM-Hintergrundbild (scripts/make-berlin-image.mjs). Liegt es in src/assets vor, hat es Vorrang
-// und die App braucht kein Internet.
-const bgImage = Object.values(
-  import.meta.glob<string>('./assets/berlin-map.png', { query: '?inline', import: 'default', eager: true }),
-)[0]
-const bgMeta = Object.values(
-  import.meta.glob<{ zoom: number; bounds: LatLngBoundsLiteral }>('./assets/berlin-map.json', { import: 'default', eager: true }),
-)[0]
 
 type Mode = 'points' | 'heat'
 
-// Fehlgeschlagene Kacheln (graue Lücken) bis zu 3x neu laden
-function retryTile(e: { tile: HTMLImageElement }) {
-  const img = e.tile
-  const tries = Number(img.dataset.retries ?? 0)
-  if (tries >= 3) return
-  img.dataset.retries = String(tries + 1)
-  const src = img.src.split('?')[0]
-  setTimeout(() => { img.src = `${src}?retry=${tries + 1}` }, 500 * (tries + 1))
-}
+const BERLIN_BOUNDS: LatLngBoundsLiteral = [[52.33, 13.08], [52.68, 13.77]]
+
+// Pastellfarbe je Bezirk (im Heatmap-Modus per CSS auf Grau gesetzt)
+const districtNames: string[] = (districts as unknown as { features: Feature[] }).features.map(
+  (f) => f.properties?.name as string,
+)
+const fillFor = (name?: string) => `hsl(${(districtNames.indexOf(name ?? '') * 47) % 360}, 45%, 88%)`
 
 // Farbskala: niedrig = blau, hoch = rot
 function colorFor(value: number): string {
   const hue = 240 - ((value - 1) / 99) * 240
   return `hsl(${hue}, 85%, 50%)`
+}
+
+function labelDistrict(feature: Feature, layer: Layer) {
+  layer.bindTooltip(feature.properties?.name, { permanent: true, direction: 'center', className: 'district-label' })
 }
 
 export default function App() {
@@ -85,38 +63,43 @@ export default function App() {
         </table>
       </aside>
       <MapContainer
-        center={[52.52, 13.405]}
-        zoom={11}
+        bounds={BERLIN_BOUNDS}
+        maxBounds={[[52.2, 12.9], [52.8, 13.95]]}
         minZoom={9}
-        maxZoom={bgImage && bgMeta ? bgMeta.zoom + 2 : 18}
-        maxBounds={bgImage && bgMeta ? bgMeta.bounds : undefined}
+        maxZoom={16}
+        zoomSnap={0.5}
         className="map"
+        attributionControl
       >
-        {bgImage && bgMeta ? (
-          <ImageOverlay url={bgImage} bounds={bgMeta.bounds} className="bg-image" attribution="&copy; OpenStreetMap-Mitwirkende" />
-        ) : bundledTiles ? (
-          <OfflineBasemap dataUrl={bundledTiles} />
-        ) : (
-          <TileLayer
-            attribution={ONLINE_TILES.attribution}
-            url={ONLINE_TILES.url}
-            subdomains={ONLINE_TILES.subdomains}
-            maxZoom={ONLINE_TILES.maxZoom}
-            eventHandlers={{ tileerror: retryTile }}
+        {/* Ebenen von unten nach oben: Bezirksflächen, Heatmap, Grenzen + Punkte */}
+        <Pane name="fill" style={{ zIndex: 300 }}>
+          <GeoJSON
+            data={districts as unknown as GeoJSON.FeatureCollection}
+            style={(f) => ({ stroke: false, fillColor: fillFor(f?.properties?.name), fillOpacity: 1, className: 'district-fill' })}
           />
-        )}
-        {mode === 'heat' && <HeatLayer data={data} />}
-        {mode === 'points' && data.map((m) => (
-          <CircleMarker
-            key={m.id}
-            center={[m.lat, m.lng]}
-            radius={m.id === selected ? 10 : 6}
-            pathOptions={{ color: m.id === selected ? '#000' : '#fff', weight: 1, fillColor: colorFor(m.value), fillOpacity: 0.85 }}
-            eventHandlers={{ click: () => setSelected(m.id) }}
-          >
-            <Popup>{m.name}<br />Messwert: {m.value}</Popup>
-          </CircleMarker>
-        ))}
+        </Pane>
+        <Pane name="heat" style={{ zIndex: 350 }}>
+          {mode === 'heat' && <HeatLayer data={data} />}
+        </Pane>
+        <GeoJSON
+          data={districts as unknown as GeoJSON.FeatureCollection}
+          style={{ color: '#666', weight: 1.2, fill: false }}
+          attribution='Bezirksgrenzen: <a href="https://www.statistik-berlin-brandenburg.de">Amt für Statistik Berlin-Brandenburg</a> (CC BY)'
+          onEachFeature={labelDistrict}
+          interactive={false}
+        />
+        {mode === 'points' &&
+          data.map((m) => (
+            <CircleMarker
+              key={m.id}
+              center={[m.lat, m.lng]}
+              radius={m.id === selected ? 10 : 6}
+              pathOptions={{ color: m.id === selected ? '#000' : '#fff', weight: 1, fillColor: colorFor(m.value), fillOpacity: 0.9 }}
+              eventHandlers={{ click: () => setSelected(m.id) }}
+            >
+              <Popup>{m.name}<br />Messwert: {m.value}</Popup>
+            </CircleMarker>
+          ))}
         {mode === 'heat' && (
           <div className="legend">
             <span>1</span><div className="bar" /><span>100</span>

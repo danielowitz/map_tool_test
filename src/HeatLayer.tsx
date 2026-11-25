@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
+import { polygons } from './data'
 import type { Measurement } from './data'
 
 const TILE = 256
@@ -69,10 +70,28 @@ export default function HeatLayer({ data }: { data: Measurement[] }) {
         }
       }
       ctx.putImageData(img, 0, 0)
+
+      // An der Berliner Stadtgrenze abschneiden: nur Pixel innerhalb der Bezirkspolygone behalten
+      ctx.globalCompositeOperation = 'destination-in'
+      ctx.beginPath()
+      for (const poly of polygons) {
+        for (const ring of poly) {
+          ring.forEach(([lng, lat], i) => {
+            const p = map.project([lat, lng], coords.z)
+            const x = (p.x - ox) / CELL
+            const y = (p.y - oy) / CELL
+            if (i === 0) ctx.moveTo(x, y)
+            else ctx.lineTo(x, y)
+          })
+          ctx.closePath()
+        }
+      }
+      ctx.fillStyle = '#000'
+      ctx.fill('evenodd')
       return canvas
       }
     }
-    const layer = new IdwLayer({ tileSize: TILE, pane: 'overlayPane', opacity: 0.85 })
+    const layer = new IdwLayer({ tileSize: TILE, pane: 'heat', opacity: 0.85 })
     map.addLayer(layer)
     return () => {
       map.removeLayer(layer)
