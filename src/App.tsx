@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { CircleMarker, GeoJSON, MapContainer, Pane, Popup } from 'react-leaflet'
+import { useEffect, useMemo, useState } from 'react'
+import { CircleMarker, GeoJSON, MapContainer, Pane, Popup, useMap, useMapEvents } from 'react-leaflet'
 import type { Feature } from 'geojson'
 import type { Layer, LatLngBoundsLiteral } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -22,6 +22,19 @@ const fillFor = (name?: string) => `hsl(${(districtNames.indexOf(name ?? '') * 4
 function colorFor(value: number): string {
   const hue = 240 - ((value - 1) / 99) * 240
   return `hsl(${hue}, 85%, 50%)`
+}
+
+// Bezirksnamen erst ab dieser Zoomstufe anzeigen (darunter überlappen sie sich)
+const LABEL_MIN_ZOOM = 11
+
+function LabelVisibility() {
+  const map = useMap()
+  const update = () => {
+    map.getContainer().classList.toggle('hide-labels', map.getZoom() < LABEL_MIN_ZOOM)
+  }
+  useMapEvents({ zoomend: update })
+  useEffect(update) // eslint-disable-line react-hooks/exhaustive-deps
+  return null
 }
 
 function labelDistrict(feature: Feature, layer: Layer) {
@@ -71,6 +84,7 @@ export default function App() {
         className="map"
         attributionControl
       >
+        <LabelVisibility />
         {/* Ebenen von unten nach oben: Bezirksflächen, Heatmap, Grenzen + Punkte */}
         <Pane name="fill" style={{ zIndex: 300 }}>
           <GeoJSON
